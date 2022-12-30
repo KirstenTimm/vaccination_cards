@@ -1,1 +1,72 @@
-test
+#This code is used to predict with PaddleOCR
+
+#Installing PaddleOCR
+!pip install -U https://paddleocr.bj.bcebos.com/whl/layoutparser-0.0.0-py3-none-any.whl
+!pip install paddlepaddle "paddleocr>=2.0.1"
+
+#Imporing usaed packages
+import cv2
+import layoutparser as lp
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+
+#Reading image
+image = cv2.imread("image.jpg")
+
+#changing format of the image to fit PaddleOCR format requirement
+image = image[..., ::-1]
+
+# load model ready to use model from the package, suited for table recognition
+## Adding thereshold (min probability for recognizing something as things from label_map)
+## Adding labels to elements to be recognized in Label_map
+## False for enforcing using CPU
+## Enabling certain model to be used for this task
+
+model = lp.PaddleDetectionLayoutModel(config_path="lp://PubLayNet/ppyolov2_r50vd_dcn_365e_publaynet/config",
+                                threshold=0.1,
+                                label_map={0: "Text", 1: "Title", 2: "List", 3:"Table", 4:"Figure"},
+                                enforce_cpu=False,
+                                enable_mkldnn=True)
+# Detect - like predict attribute
+layout = model.detect(image)
+
+# show result
+show_img = lp.draw_box(image, layout, box_width=3, show_element_type=True)
+show_img
+
+# DRAFT - finding tables/figures and saving their coordinates
+for l in layout:
+  if l.type in ['Table', 'Figure']:
+    x_1 = int(l.block.x_1)
+    y_1 = int(l.block.y_1)
+    x_2 = int(l.block.x_2)
+    y_2 = int(l.block.y_2)
+    
+# Extracting only the area marked with the rectangle
+image = cv2.imread('testskema7.jpg')
+cv2.imwrite('test_card_7_extracted.jpg', image[y_1:y_2, x_1:x_2])
+
+from paddleocr import PaddleOCR, draw_ocr
+
+# OCR in this case also cards as predit
+ocr = PaddleOCR(lang='en')
+image_height = image.shape[0]
+image_width = image.shape[1]
+output = ocr.ocr('testskema7.jpg')
+
+# Extracting output - coordinates for boxes with text and the content of them. Then probabilities that the text is that text
+boxes = [line[0] for line in output[0]]
+texts = [line[1][0] for line in output[0]]
+probabilities = [line[1][1] for line in output[0]]
+
+# Creating an image with overlay of boxes and text on them
+image_with_boxes = image.copy()
+for box, text in zip(boxes, texts):
+  cv2.rectangle(image_with_boxes,
+                (int(box[0][0]), int(box[0][1])), (int(box[2][0]), int(box[2][1])),
+                (0,0,255), 1
+  )
+  cv2.putText(image_with_boxes, text, (int(box[0][0]), int(box[0][1])),
+            cv2.FONT_HERSHEY_SIMPLEX, 1, (222,0,0), 1)
+cv2.imwrite('test_card_7_with_boxes.jpg', image_with_boxes)
